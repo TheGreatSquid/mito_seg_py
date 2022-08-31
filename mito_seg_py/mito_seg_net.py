@@ -60,7 +60,7 @@ import tensorflow as tf
 # ignoring deprecation warnings
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
-from data_generator import *
+from .data_generator import *
 
 
 class MitoSegNet:
