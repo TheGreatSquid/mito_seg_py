@@ -27,6 +27,7 @@ from time import time
 from math import sqrt
 from skimage.morphology import remove_small_objects
 from scipy.ndimage import label
+import matplotlib.pyplot as plt
 
 
 class GPU_or_CPU:
@@ -47,10 +48,10 @@ class GPU_or_CPU:
 
         return self.mode
 
-
+from tensorflow import keras
 from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, UpSampling2D, Activation, BatchNormalization
 from keras.models import Model
-from tensorflow.keras.optimizers import Adam
+from keras.optimizers import Adam
 from keras.initializers import RandomNormal as gauss
 from keras import backend as K
 from keras import losses
@@ -403,6 +404,259 @@ class MitoSegNet:
 
         K.clear_session()
 
+    def get_tile_values(self, org_img_cols, org_img_rows, bs_x, bs_y, tile_size): 
+
+        x = org_img_cols + 2 * bs_x
+        y = org_img_rows + 2 * bs_y
+
+        x_tile = math.ceil(x / tile_size)
+        y_tile = math.ceil(y / tile_size)
+
+        x_overlap = (np.abs(x - x_tile * tile_size)) / (x_tile - 1)
+        y_overlap = (np.abs(y - y_tile * tile_size)) / (y_tile - 1)
+
+        return x, y, x_tile, y_tile, x_overlap, y_overlap
+
+    def create_test_data(self, arr, org_img_cols, org_img_rows, tile_size):
+
+        # adding all image data to one numpy array file (npy)
+        # all original image files are added to imgs_test.npy
+        natural_keys = self.natural_keys
+
+        i = 0
+        print('-' * 30)
+        print('Creating test images...')
+        print('-' * 30)
+
+        arr = ((arr / arr.max()) * 255).astype(np.uint8)
+
+        # adding a border around image to avoid using segmented border regions for final mask
+        if org_img_cols < tile_size:
+            bs_x = int((tile_size - org_img_cols) / 2)
+        else:
+            bs_x = 40
+
+        if org_img_rows < tile_size:
+            bs_y = int((tile_size - org_img_rows) / 2)
+        else:
+            bs_y = 40
+
+        x, y, x_tile, y_tile, x_overlap, y_overlap = self.get_tile_values(org_img_cols, org_img_rows, bs_x, bs_y,
+                                                                        tile_size)
+
+        while not x_overlap.is_integer():
+
+            bs_x+=1
+            x, y, x_tile, y_tile, x_overlap, y_overlap = self.get_tile_values(org_img_cols, org_img_rows, bs_x, bs_y,
+                                                                            tile_size)
+
+        while not y_overlap.is_integer():
+            bs_y+=1
+            x, y, x_tile, y_tile, x_overlap, y_overlap = self.get_tile_values(org_img_cols, org_img_rows, bs_x, bs_y,
+                                                                            tile_size)
+
+        n_tiles = x_tile * y_tile
+        ###############
+
+        imgdatas = np.ndarray((n_tiles, tile_size, tile_size, 1), dtype=np.uint8)
+        preproc = Preprocess()
+
+        ##### NEW METHOD FOR ONE IMAGE
+
+        pad_img = cv2.copyMakeBorder(arr, bs_y, bs_y, bs_x, bs_x, cv2.BORDER_REFLECT)
+        cop_img = copy.copy(pad_img)
+
+        y, x = pad_img.shape
+        # split into n tiles
+
+        start_y = 0
+        start_x = 0
+        end_y = tile_size
+        end_x = tile_size
+        column = 0
+        row = 0
+
+        for n in range(n_tiles):
+
+            start_x, end_x, start_y, end_y, column, row = preproc.find_tile_pos(x, y, tile_size, start_x, end_x,
+                                                                                start_y, end_y, column, row)
+
+            img_tile = cop_img[start_y:end_y, start_x:end_x]
+            img = img_tile.reshape((tile_size, tile_size, 1))
+            imgdatas[i] = img
+
+            i += 1
+
+        return imgdatas, y, x, bs_x, bs_y, x_tile, y_tile, x_overlap, y_overlap, n_tiles
+
+    def load_test_data(self, test_path):
+
+        print('-' * 30)
+        print('Load test images...')
+        print('-' * 30)
+
+        imgs_test = np.load(test_path + os.sep + "imgs_array.npy")
+        imgs_test = imgs_test.astype('float32')
+
+        imgs_test /= 255
+
+        return imgs_test
+    
+    def predict_from_array(self, arr, wmap, tile_size, model_name, pretrain, min_obj_size):
+        K.clear_session()
+
+        org_img_rows = self.org_img_rows
+        org_img_cols = self.org_img_cols
+
+        # l_imgs is the input, split into (overlapping) tiles
+        l_imgs, y, x, bs_x, bs_y, x_tile, y_tile, x_overlap, y_overlap, n_tiles = self.create_test_data(arr, org_img_cols, org_img_rows, int(tile_size))
+        imgs_test = l_imgs.astype(np.float32) / 255
+
+        lr = 1e-4
+        model = self.get_mitosegnet(wmap, lr)
+
+        if pretrain == "":
+            model.load_weights(self.path + os.sep + model_name)
+        else:
+            model.load_weights(pretrain)
+
+        imgs = model.predict(imgs_test, batch_size=1, verbose=1)
+
+        #####
+
+        start_y = 0
+        start_x = 0
+        end_y = tile_size
+        end_x = tile_size
+
+        column = 0
+        row = 0
+
+        img_nr = 0
+        org_img_list_index = 0
+
+        for n in range(imgs.shape[0]):
+
+            if img_nr == 0:
+                current_img = np.zeros((org_img_rows, org_img_cols))
+
+            img = imgs[n]
+
+            img = np.array(img)
+            img = img.reshape((tile_size, tile_size))
+
+            #############################################################
+            # if we are in first or last column, the real x tile size is dependant on both border size and x overlap
+            if column == 0 or column == x_tile - 1:
+
+                real_x_tile = int(tile_size - bs_x - x_overlap / 2)
+                #border_x = bs_x
+
+            # if we are in first or last row, the real y tile size is dependant on both border size and y overlap
+            if row == 0 or row == y_tile - 1:
+                real_y_tile = int(tile_size - bs_y - y_overlap / 2)
+                #border_y = bs_y
+
+            # first tile of next row
+            if column == 0 and row != 0:
+
+                start_y = int(y_overlap / 2)
+
+                final_start_y = final_end_y
+
+                start_x = bs_x
+                end_x = int(real_x_tile + bs_x)
+
+                final_start_x = 0
+                final_end_x = int(real_x_tile)
+
+                # if we are between the first and last row the real y tile size depends only on the overlap
+                if row != 0 and row != y_tile - 1:
+                    real_y_tile = int(tile_size - y_overlap)
+                    #border_y = 0
+
+                end_y = int(start_y + real_y_tile)
+
+                final_end_y = int(final_start_y + real_y_tile)
+
+            # first tile
+            if column == 0 and row == 0:
+                start_x = bs_x
+                end_x = int(real_x_tile + bs_x)
+
+                start_y = bs_y
+                end_y = int(real_y_tile + bs_y)
+
+                final_start_x = 0
+                final_end_x = int(real_x_tile)
+
+                final_start_y = 0
+                final_end_y = int(real_y_tile)
+
+            column += 1
+
+            # last column tile
+            if column == x_tile:
+                start_x = int(start_x)
+
+                org_end_x = x - bs_x
+
+                end_x = tile_size - bs_x
+
+                final_end_x = org_end_x
+
+                column = 0
+                row += 1
+
+            # iterate over columns
+
+            # prior to stitching the overlapping sections and the padding have to be removed
+            cut_img = img[int(start_y):int(end_y), int(start_x):int(end_x)]
+
+            current_img[int(final_start_y):int(final_end_y), int(final_start_x):int(final_end_x)] = cut_img
+
+            start_x = int(x_overlap / 2)
+
+            final_start_x += int(real_x_tile)
+
+            # real tile size is still set to old value
+            if column != 0 and column != x_tile - 1:
+                real_x_tile = int(tile_size - x_overlap)
+
+            end_x = start_x + int(real_x_tile)
+
+            final_end_x = int(final_start_x + real_x_tile)
+
+            #############################################################
+
+            current_img = current_img.astype(np.float32)
+
+            img_nr += 1
+
+            # once one image has been fully stitched, remove any objects below 10 px size and save
+            if img_nr == n_tiles:
+
+                column = 0
+                row = 0
+
+                # convert to binary
+                current_img[current_img > 0.5] = 255
+                current_img[current_img <= 0.5] = 0
+
+                current_img = current_img.astype(np.uint8)
+
+                label_image, num_features = label(current_img)
+
+                # allow user to specify what minimum object size should be (originally set to 10)
+                new_image = remove_small_objects(label_image, int(min_obj_size))
+                new_image[new_image != 0] = 255
+       
+                org_img_list_index += 1
+                img_nr = 0
+
+        K.clear_session()
+        return new_image
+
     def predict(self, test_path, wmap, tile_size, model_name, pretrain, min_obj_size, ps_filter, x_res, y_res):
 
         K.clear_session()
@@ -569,6 +823,8 @@ class MitoSegNet:
 
         l_imgs, y, x, bs_x, bs_y, x_tile, y_tile, x_overlap, y_overlap, n_tiles = create_test_data(int(tile_size))
         imgs_test = load_test_data()
+        print('HERE')
+        print(imgs_test.shape)
 
         # predict if no npy array exists yet
         if not os.path.isfile(test_path + os.sep + "imgs_mask_array.npy"):
