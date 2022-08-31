@@ -50,7 +50,7 @@ class GPU_or_CPU:
 
 from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, UpSampling2D, Activation, BatchNormalization
 from keras.models import Model
-from keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam
 from keras.initializers import RandomNormal as gauss
 from keras import backend as K
 from keras import losses
