@@ -6,7 +6,7 @@ setuptools.setup(
     author='Paul Morenkov',
     packages=['mito_seg_py'],
     install_requires=[
-        'keras>=2.3.0',
-        'tensorflow>=1.14.0',
+        'keras',
+        'tensorflow',
     ]
 )
