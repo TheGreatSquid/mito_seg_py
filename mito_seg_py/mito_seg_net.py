@@ -62,7 +62,6 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 from .data_generator import *
 
-
 class MitoSegNet:
 
     def __init__(self, path, img_rows, img_cols, org_img_rows, org_img_cols):
