@@ -502,7 +502,7 @@ class MitoSegNet:
 
         return imgs_test
     
-    def predict_from_array(self, arr, wmap, tile_size, model_name, pretrain, min_obj_size):
+    def predict_from_array(self, arr, wmap, tile_size, model_name, pretrain, min_obj_size, verbose=0):
         K.clear_session()
 
         org_img_rows = self.org_img_rows
@@ -520,7 +520,7 @@ class MitoSegNet:
         else:
             model.load_weights(pretrain)
 
-        imgs = model.predict(imgs_test, batch_size=1, verbose=1)
+        imgs = model.predict(imgs_test, batch_size=1, verbose=verbose)
 
         #####
 
