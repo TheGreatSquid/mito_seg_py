@@ -65,10 +65,9 @@ from .data_generator import *
 
 class MitoSegNet:
 
-    def __init__(self, path, img_rows, img_cols, org_img_rows, org_img_cols):
+    def __init__(self, img_rows, img_cols, org_img_rows, org_img_cols):
 
-        self.path = path
-
+        self.path = ''
         self.img_rows = img_rows
         self.img_cols = img_cols
 
@@ -262,7 +261,7 @@ class MitoSegNet:
 
         model = Model(inputs=input, outputs=conv10)
 
-        model.compile(optimizer=Adam(lr=lr), loss=loss, metrics=['accuracy', self.dice_coefficient])
+        model.compile(optimizer=Adam(learning_rate=lr), loss=loss, metrics=['accuracy', self.dice_coefficient])
 
         return model
 
@@ -502,7 +501,10 @@ class MitoSegNet:
 
         return imgs_test
     
-    def predict_from_array(self, arr, wmap, tile_size, model_name, pretrain, min_obj_size, verbose=0):
+    def predict_from_array(self, arr, wmap, tile_size, pretrain, min_obj_size, verbose=0):
+        '''Predict from numpy array.
+        
+        usage: predict_from_array(arr, False, tile_size, min_obj_size)'''
         K.clear_session()
 
         org_img_rows = self.org_img_rows
@@ -514,11 +516,7 @@ class MitoSegNet:
 
         lr = 1e-4
         model = self.get_mitosegnet(wmap, lr)
-
-        if pretrain == "":
-            model.load_weights(self.path + os.sep + model_name)
-        else:
-            model.load_weights(pretrain)
+        model.load_weights(pretrain)
 
         imgs = model.predict(imgs_test, batch_size=1, verbose=verbose)
 
