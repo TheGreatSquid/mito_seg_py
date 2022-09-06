@@ -130,7 +130,7 @@ class MitoSegNet:
 
             return imgs_train, imgs_mask_train
 
-    def get_mitosegnet(self, wmap, lr):
+    def get_mitosegnet(self, wmap, lr, verbose=0):
 
         inputs = Input(shape=(self.img_rows, self.img_cols, 1))
         print(inputs.get_shape(), type(inputs))
@@ -140,44 +140,44 @@ class MitoSegNet:
         ######################################################################
 
         conv1 = Conv2D(64, 3, padding='same', kernel_initializer=gauss())(inputs)
-        print("conv1 shape:", conv1.shape)
+        if verbose > 0: print("conv1 shape:", conv1.shape)
         batch1 = BatchNormalization()(conv1)
         act1 = Activation("relu")(batch1)
 
         conv1 = Conv2D(64, 3, padding='same', kernel_initializer=gauss(stddev=sqrt(2 / (9 * 64))))(act1)  # conv1
-        print("conv1 shape:", conv1.shape)
+        if verbose > 0: print("conv1 shape:", conv1.shape)
         batch1 = BatchNormalization()(conv1)
         act1 = Activation("relu")(batch1)
         pool1 = MaxPooling2D(pool_size=(2, 2))(act1)
-        print("pool1 shape:", pool1.shape)
+        if verbose > 0: print("pool1 shape:", pool1.shape)
         ########
 
         ########
         conv2 = Conv2D(128, 3, padding='same', kernel_initializer=gauss(stddev=sqrt(2 / (9 * 64))))(pool1)
-        print("conv2 shape:", conv2.shape)
+        if verbose > 0: print("conv2 shape:", conv2.shape)
         batch2 = BatchNormalization()(conv2)
         act2 = Activation("relu")(batch2)
 
         conv2 = Conv2D(128, 3, padding='same', kernel_initializer=gauss(stddev=sqrt(2 / (9 * 128))))(act2)  # conv2
-        print("conv2 shape:", conv2.shape)
+        if verbose > 0: print("conv2 shape:", conv2.shape)
         batch2 = BatchNormalization()(conv2)
         act2 = Activation("relu")(batch2)
         pool2 = MaxPooling2D(pool_size=(2, 2))(act2)
-        print("pool2 shape:", pool2.shape)
+        if verbose > 0: print("pool2 shape:", pool2.shape)
         ########
 
         ########
         conv3 = Conv2D(256, 3, padding='same', kernel_initializer=gauss(stddev=sqrt(2 / (9 * 128))))(pool2)
-        print("conv3 shape:", conv3.shape)
+        if verbose > 0: print("conv3 shape:", conv3.shape)
         batch3 = BatchNormalization()(conv3)
         act3 = Activation("relu")(batch3)
 
         conv3 = Conv2D(256, 3, padding='same', kernel_initializer=gauss(stddev=sqrt(2 / (9 * 256))))(act3)  # conv3
-        print("conv3 shape:", conv3.shape)
+        if verbose > 0: print("conv3 shape:", conv3.shape)
         batch3 = BatchNormalization()(conv3)
         act3 = Activation("relu")(batch3)
         pool3 = MaxPooling2D(pool_size=(2, 2))(act3)
-        print("pool3 shape:", pool3.shape)
+        if verbose > 0: print("pool3 shape:", pool3.shape)
         ########
 
         ########
