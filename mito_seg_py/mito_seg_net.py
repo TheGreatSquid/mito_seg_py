@@ -133,7 +133,7 @@ class MitoSegNet:
     def get_mitosegnet(self, wmap, lr, verbose=0):
 
         inputs = Input(shape=(self.img_rows, self.img_cols, 1))
-        print(inputs.get_shape(), type(inputs))
+        if verbose > 0: print(inputs.get_shape(), type(inputs))
 
         # core mitosegnet (modified u-net) architecture
         # batchnorm architecture (batchnorm before activation)
